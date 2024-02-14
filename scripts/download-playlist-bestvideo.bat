@@ -1,0 +1,2 @@
+::json -J
+C:\Python37\Scripts\yt-dlp.exe --restrict-filenames --retries infinite  -f "bestvideo[height<=720]+bestaudio/best[height<=720]" -i -o "%%(playlist_index)s-%%(title)s.%%(ext)s" -c --yes-playlist %1

@@ -1,0 +1,1 @@
+clang-format -style=gnu -dump-config > .clang-format

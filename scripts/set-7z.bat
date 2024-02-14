@@ -1,0 +1,1 @@
+set PATH=C:\Users\Usr\AppData\Roaming\7zip\;%PATH%

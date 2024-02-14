@@ -1,0 +1,1 @@
+C:\dev\utils\Sysinternals\PsExec.exe "C:\Users\Usr\AppData\Local\Postman\Postman.exe"

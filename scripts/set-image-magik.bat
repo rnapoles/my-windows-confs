@@ -1,0 +1,1 @@
+set PATH=C:\dev\utils\gs\;C:\dev\image\ImageMagick\;%PATH%

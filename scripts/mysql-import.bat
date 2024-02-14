@@ -1,0 +1,1 @@
+mysql.bat -u root -p < %1

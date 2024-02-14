@@ -1,0 +1,1 @@
+C:\dev\db\mariadb-11.3\bin\mysql.exe %*

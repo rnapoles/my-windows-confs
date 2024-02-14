@@ -1,0 +1,1 @@
+"C:\Program Files\TotalCommander2021\Tools\SpaceMonger\SpaceMonger.exe"

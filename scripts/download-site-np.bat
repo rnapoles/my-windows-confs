@@ -1,0 +1,2 @@
+SET /A test=%RANDOM%
+START /B CMD /C CALL wget --no-check-certificate -e robots=off -r --no-clobber --page-requisites --html-extension -k --restrict-file-names=windows --adjust-extension -np %* -o %test%.log 

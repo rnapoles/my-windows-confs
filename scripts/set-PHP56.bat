@@ -1,0 +1,1 @@
+set PATH=D:\xampp1\php\;%PATH%

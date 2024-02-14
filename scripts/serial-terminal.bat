@@ -1,0 +1,1 @@
+explorer C:\QtLibs\terminal.exe

@@ -1,0 +1,1 @@
+C:\dev\utils\Sysinternals\PsExec.exe -d "C:\Program Files\Google\Chrome\Application\chrome.exe"

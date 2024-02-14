@@ -1,0 +1,1 @@
+set PATH=C:\dev\lang\php\7.4.3\;%PATH%

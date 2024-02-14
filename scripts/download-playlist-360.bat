@@ -1,0 +1,1 @@
+C:\Python37\Scripts\yt-dlp.exe --restrict-filenames --retries infinite  -f "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]" -i -o "%%(playlist_index)s-%%(title)s.%%(ext)s" -c --yes-playlist -J %1

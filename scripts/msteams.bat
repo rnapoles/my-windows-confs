@@ -1,0 +1,1 @@
+explorer C:\ProgramData\Usr\Microsoft\Teams\current\Teams.exe

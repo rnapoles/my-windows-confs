@@ -1,0 +1,1 @@
+python C:\dev\commands\check_code.py

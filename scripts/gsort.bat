@@ -1,0 +1,1 @@
+gnu-sort -T %TMP% %*

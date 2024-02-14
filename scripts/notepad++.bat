@@ -1,0 +1,1 @@
+call C:\dev\editors\Notepad++\notepad++.exe %*
