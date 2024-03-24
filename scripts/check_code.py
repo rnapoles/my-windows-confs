@@ -4,7 +4,7 @@ import subprocess
 from git import Repo
 
 # Ruta al repositorio Git
-repo_path = 'C:\\Work\\vixidev\\apivixi'
+repo_path = 'C:\\Work\\'
 
 # Inicializa el repositorio
 repo = Repo(repo_path)
