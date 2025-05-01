@@ -51,6 +51,12 @@ The generated registry file creates:
 2. The same menu entry when right-clicking on the directory background
 3. Individual entries for each application under this menu
 
+## Build
+
+```sh
+csc ContextMenuGenerator.cs
+```
+
 ## Requirements
 - Windows operating system
 - .NET Framework
@@ -59,8 +65,12 @@ The generated registry file creates:
 - If an executable path doesn't exist, the program will display a warning but still add it to the registry file
 - The registry file uses the application's own executable as its icon in the context menu
 - All entries are positioned at the top of the context menu for easy access
+- ⚠️ There's a limit of 16 entries for each context menu entry, including submenus and any entry inside of them.
 
 ## Links
 
 - [Creating custom context menu for Windows file explorer](https://mrlixm.github.io/blog/windows-explorer-context-menu/)
 - [Create a menu with two submenus](https://superuser.com/a/1296812)
+- [Creating a context menu with sub-menu for Windows for a specific file extension](https://www.notion.so/liamcollod/Creating-a-context-menu-with-sub-menu-for-Windows-for-a-specific-file-extension-61d5a0d696ed4b1db52f043656f936d6)
+- [Is there a maximum right click context menu items limit](https://stackoverflow.com/questions/48625223/is-there-a-maximum-right-click-context-menu-items-limit)
+- [Convert file structures to right-click context menu for Windows](https://github.com/MrLixm/frmb)

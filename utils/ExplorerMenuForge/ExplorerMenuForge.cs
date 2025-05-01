@@ -2,11 +2,15 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Collections.Generic;
 
 namespace ExplorerMenuForge
 {
     class Program
     {
+        // Maximum number of entries per registry file
+        const int MAX_ENTRIES_PER_FILE = 16;
+
         static void Main(string[] args)
         {
             if (args.Length == 0)
@@ -39,17 +43,95 @@ namespace ExplorerMenuForge
                 executablePaths = args;
             }
 
-            // Generate the registry file
-            string regFileContent = GenerateRegistryFile(executablePaths);
+            // Check if any executable paths were found
+            if (executablePaths.Length == 0)
+            {
+                Console.WriteLine("Error: No executable paths found.");
+                return;
+            }
 
-            // Write to file
-            string outputPath = "context-menu.reg";
-            File.WriteAllText(outputPath, regFileContent);
+            // Sort the paths alphabetically
+            Array.Sort(executablePaths);
 
-            Console.WriteLine(string.Format("Registry file generated successfully: {0}", Path.GetFullPath(outputPath)));
+            // Split the paths into chunks of MAX_ENTRIES_PER_FILE
+            List<string[]> pathChunks = new List<string[]>();
+            for (int i = 0; i < executablePaths.Length; i += MAX_ENTRIES_PER_FILE)
+            {
+                int chunkSize = Math.Min(MAX_ENTRIES_PER_FILE, executablePaths.Length - i);
+                string[] chunk = new string[chunkSize];
+                Array.Copy(executablePaths, i, chunk, 0, chunkSize);
+                pathChunks.Add(chunk);
+            }
+
+            // Generate registry files for each chunk
+            for (int i = 0; i < pathChunks.Count; i++)
+            {
+                string outputPath = pathChunks.Count == 1 
+                    ? "context-menu.reg" 
+                    : string.Format("context-menu-{0}.reg", i + 1);
+                
+                // Use the file number (i+1) for the menu identifier
+                string menuId = pathChunks.Count == 1 ? "MyMenu1" : string.Format("MyMenu{0}", i + 1);
+                
+                string regFileContent = GenerateRegistryFile(pathChunks[i], menuId);
+                File.WriteAllText(outputPath, regFileContent);
+                
+                Console.WriteLine(string.Format("Registry file generated successfully: {0}", Path.GetFullPath(outputPath)));
+            }
+
+            // Generate removal script
+            GenerateRemovalScript(pathChunks.Count);
         }
 
-        static string GenerateRegistryFile(string[] executablePaths)
+        /// <summary>
+        /// Generates a batch file to remove all registry keys created by this tool
+        /// </summary>
+        static void GenerateRemovalScript(int numFiles)
+        {
+            StringBuilder sb = new StringBuilder();
+            
+            // Add batch file header with admin check
+            sb.AppendLine("@echo off");
+            sb.AppendLine(":: Check for admin privileges");
+            sb.AppendLine("net session >nul 2>&1");
+            sb.AppendLine("if %errorLevel% neq 0 (");
+            sb.AppendLine("    echo This script requires administrator privileges.");
+            sb.AppendLine("    echo Please run as administrator.");
+            //sb.AppendLine("    pause");
+            sb.AppendLine("    exit /b 1");
+            sb.AppendLine(")");
+            sb.AppendLine();
+            
+            sb.AppendLine("echo Removing context menu registry keys...");
+            sb.AppendLine();
+            
+            // Remove all possible menu entries (1-10 should be more than enough)
+            for (int i = 1; i <= numFiles; i++)
+            {
+                string menuId = string.Format("MyMenu{0}", i);
+                
+                // Remove Directory context menu
+                sb.AppendLine(string.Format("reg delete \"HKEY_CLASSES_ROOT\\Directory\\shell\\{0}\" /f >nul 2>&1", menuId));
+                
+                // Remove Directory Background context menu
+                sb.AppendLine(string.Format("reg delete \"HKEY_CLASSES_ROOT\\Directory\\background\\shell\\{0}\" /f >nul 2>&1", menuId));
+                
+                // Remove ContextMenus entries
+                sb.AppendLine(string.Format("reg delete \"HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\{0}\" /f >nul 2>&1", menuId));
+            }
+            
+            sb.AppendLine();
+            sb.AppendLine("echo Context menu entries have been removed.");
+            //sb.AppendLine("pause");
+            
+            // Write to file
+            string outputPath = "remove-context-menu.bat";
+            File.WriteAllText(outputPath, sb.ToString());
+            
+            Console.WriteLine(string.Format("Removal script generated successfully: {0}", Path.GetFullPath(outputPath)));
+        }
+
+        static string GenerateRegistryFile(string[] executablePaths, string menuId)
         {
             StringBuilder sb = new StringBuilder();
             
@@ -59,19 +141,19 @@ namespace ExplorerMenuForge
             
             // Add context menu setup for Directory and Directory Background
             sb.AppendLine(";This displays context menu when you right-click Directory");
-            sb.AppendLine("[HKEY_CLASSES_ROOT\\Directory\\shell\\MyMenu1]");
+            sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\shell\\{0}]", menuId));
             sb.AppendLine(";Directory Level Menu Title");
             sb.AppendLine("\"MUIVerb\"=\"MyNewMenu\"");
             sb.AppendLine("\"Icon\"=\"cmd.exe\"");
-            sb.AppendLine("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\MyMenu1\"");
+            sb.AppendLine(string.Format("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\{0}\"", menuId));
             sb.AppendLine();
             
             sb.AppendLine(";This displays context menu when you right-click Directory Background");
-            sb.AppendLine("[HKEY_CLASSES_ROOT\\Directory\\background\\shell\\MyMenu1]");
+            sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\background\\shell\\{0}]", menuId));
             sb.AppendLine(";Background Level Menu Title");
             sb.AppendLine("\"MUIVerb\"=\"MyNewMenu\"");
             sb.AppendLine("\"Icon\"=\"cmd.exe\"");
-            sb.AppendLine("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\MyMenu1\"");
+            sb.AppendLine(string.Format("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\{0}\"", menuId));
             sb.AppendLine();
             
             // Add separator after header
@@ -92,33 +174,92 @@ namespace ExplorerMenuForge
                     isFirstEntry = false;
                 }
 
-                if (!File.Exists(path))
+                // Resolve the path if it's just an executable name
+                string resolvedPath = ResolveExecutablePath(path);
+                
+                if (!File.Exists(resolvedPath))
                 {
-                    Console.WriteLine(string.Format("Warning: File '{0}' does not exist, but adding it anyway.", path));
+                    Console.WriteLine(string.Format("Warning: File '{0}' does not exist, but adding it anyway.", resolvedPath));
                 }
 
                 // Extract application name from path
-                string appName = Path.GetFileNameWithoutExtension(path);
+                string appName = Path.GetFileNameWithoutExtension(resolvedPath);
                 
                 // Get Full path
-                string fullPath = Path.GetFullPath(path);
+                string fullPath = Path.GetFullPath(resolvedPath);
 
                 // Escape backslashes for registry format
                 string escapedPath = fullPath.Replace("\\", "\\\\");
 
                 // Add registry entries
-                sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\MyMenu1\\shell\\{0}]", appName));
+                sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\{0}\\shell\\{1}]", menuId, appName));
                 sb.AppendLine(string.Format("\"MUIVerb\"=\"Open with {0}\"", appName));
                 sb.AppendLine("\"Position\"=\"top\"");
                 sb.AppendLine(string.Format("\"Icon\"=\"{0}\"", escapedPath));
                 sb.AppendLine();
                 
-                sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\MyMenu1\\shell\\{0}\\command]", appName));
+                sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\{0}\\shell\\{1}\\command]", menuId, appName));
                 sb.AppendLine(string.Format("@=\"{0} \\\"%1\\\"\"", escapedPath));
                 sb.AppendLine();
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Resolves an executable name or path to its full path by searching the system PATH if necessary
+        /// </summary>
+        /// <param name="executablePath">The executable name or path</param>
+        /// <returns>The full path to the executable</returns>
+        static string ResolveExecutablePath(string executablePath)
+        {
+            // If the path already contains directory information or is a full path, return it
+            if (Path.IsPathRooted(executablePath) || executablePath.Contains("\\") || executablePath.Contains("/"))
+            {
+                return executablePath;
+            }
+
+            // Make sure we have the .exe extension
+            string exeName = executablePath;
+            if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                exeName += ".exe";
+            }
+
+            // First check if the executable exists in the current directory
+            string currentDirPath = Path.Combine(Environment.CurrentDirectory, exeName);
+            if (File.Exists(currentDirPath))
+            {
+                return currentDirPath;
+            }
+
+            // Search the PATH environment variable
+            string pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (string.IsNullOrEmpty(pathEnv))
+            {
+                return executablePath; // Return original if PATH is not available
+            }
+
+            // Split the PATH and search each directory
+            foreach (string dir in pathEnv.Split(Path.PathSeparator))
+            {
+                try
+                {
+                    string fullPath = Path.Combine(dir, exeName);
+                    if (File.Exists(fullPath))
+                    {
+                        return fullPath;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Skip invalid paths in PATH
+                    continue;
+                }
+            }
+
+            // If not found in PATH, return the original
+            return executablePath;
         }
     }
 }
