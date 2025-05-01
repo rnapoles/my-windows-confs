@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace ExplorerMenuForge
 {
@@ -10,23 +11,54 @@ namespace ExplorerMenuForge
     {
         // Maximum number of entries per registry file
         const int MAX_ENTRIES_PER_FILE = 16;
+        // Default menu name prefix
+        const string DEFAULT_MENU_PREFIX = "MyMenu";
+        // Default menu caption
+        const string DEFAULT_MENU_CAPTION = "My New Menu";
 
         static void Main(string[] args)
         {
             if (args.Length == 0)
             {
-                Console.WriteLine("Usage:");
-                Console.WriteLine("  ExplorerMenuForge.exe <executable_path> [<executable_path> ...]");
-                Console.WriteLine("  ExplorerMenuForge.exe -f <file_with_paths>");
+                ShowUsage();
                 return;
             }
 
-            string[] executablePaths;
-
-            // Check if input is from a file
-            if (args[0] == "-f" && args.Length > 1)
+            // Define options that require values
+            var optionsWithValues = new Dictionary<string, bool>
             {
-                string filePath = args[1];
+                { "-n", true },  // Menu name requires a value
+                { "-c", true },  // Menu caption requires a value
+                { "-f", true }   // File with paths requires a value
+            };
+
+            // Create and parse arguments
+            var parser = new ArgumentParser(args, optionsWithValues);
+            if (!parser.Parse())
+            {
+                ShowUsage();
+                return;
+            }
+
+            // Get menu prefix (name)
+            string menuPrefix = DEFAULT_MENU_PREFIX;
+            if (parser.HasOption("-n"))
+            {
+                menuPrefix = parser.GetOptionValue("-n");
+            }
+
+            // Get menu caption
+            string menuCaption = DEFAULT_MENU_CAPTION;
+            if (parser.HasOption("-c"))
+            {
+                menuCaption = FormatMenuCaption(parser.GetOptionValue("-c"));
+            }
+
+            // Get executable paths
+            string[] executablePaths;
+            if (parser.HasOption("-f"))
+            {
+                string filePath = parser.GetOptionValue("-f");
                 if (!File.Exists(filePath))
                 {
                     Console.WriteLine(string.Format("Error: File '{0}' not found.", filePath));
@@ -39,8 +71,8 @@ namespace ExplorerMenuForge
             }
             else
             {
-                // Input is from command line arguments
-                executablePaths = args;
+                // Get non-option arguments as executable paths
+                executablePaths = parser.NonOptionArgs;
             }
 
             // Check if any executable paths were found
@@ -71,22 +103,52 @@ namespace ExplorerMenuForge
                     : string.Format("context-menu-{0}.reg", i + 1);
                 
                 // Use the file number (i+1) for the menu identifier
-                string menuId = pathChunks.Count == 1 ? "MyMenu1" : string.Format("MyMenu{0}", i + 1);
+                string menuId = pathChunks.Count == 1 ? menuPrefix + "1" : string.Format("{0}{1}", menuPrefix, i + 1);
                 
-                string regFileContent = GenerateRegistryFile(pathChunks[i], menuId);
+                string regFileContent = GenerateRegistryFile(pathChunks[i], menuId, menuCaption);
                 File.WriteAllText(outputPath, regFileContent);
                 
                 Console.WriteLine(string.Format("Registry file generated successfully: {0}", Path.GetFullPath(outputPath)));
             }
 
             // Generate removal script
-            GenerateRemovalScript(pathChunks.Count);
+            GenerateRemovalScript(pathChunks.Count, menuPrefix);
+        }
+
+        static void ShowUsage()
+        {
+            Console.WriteLine("Usage:");
+            Console.WriteLine("  ExplorerMenuForge.exe <executable_path> [<executable_path> ...]");
+            Console.WriteLine("  ExplorerMenuForge.exe -f <file_with_paths>");
+            Console.WriteLine("  ExplorerMenuForge.exe -n <menu_name> <executable_path> [<executable_path> ...]");
+            Console.WriteLine("  ExplorerMenuForge.exe -n <menu_name> -f <file_with_paths>");
+            Console.WriteLine("  ExplorerMenuForge.exe -c <menu_caption> <executable_path> [<executable_path> ...]");
+            Console.WriteLine("  ExplorerMenuForge.exe -n <menu_name> -c <menu_caption> <executable_path> [<executable_path> ...]");
+        }
+
+        /// <summary>
+        /// Formats a menu caption to make it more visually appealing
+        /// </summary>
+        /// <param name="caption">The raw caption string</param>
+        /// <returns>A formatted caption string</returns>
+        static string FormatMenuCaption(string caption)
+        {
+            if (string.IsNullOrWhiteSpace(caption))
+                return DEFAULT_MENU_CAPTION;
+
+            // Insert spaces before capital letters (for camelCase or PascalCase)
+            string spacedCaption = string.Concat(caption.Select((c, i) => 
+                i > 0 && char.IsUpper(c) && !char.IsUpper(caption[i-1]) ? " " + c : c.ToString()));
+            
+            // Convert to title case (first letter of each word capitalized)
+            TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+            return textInfo.ToTitleCase(spacedCaption.ToLower());
         }
 
         /// <summary>
         /// Generates a batch file to remove all registry keys created by this tool
         /// </summary>
-        static void GenerateRemovalScript(int numFiles)
+        static void GenerateRemovalScript(int numFiles, string menuPrefix)
         {
             StringBuilder sb = new StringBuilder();
             
@@ -105,10 +167,10 @@ namespace ExplorerMenuForge
             sb.AppendLine("echo Removing context menu registry keys...");
             sb.AppendLine();
             
-            // Remove all possible menu entries (1-10 should be more than enough)
+            // Remove all menu entries
             for (int i = 1; i <= numFiles; i++)
             {
-                string menuId = string.Format("MyMenu{0}", i);
+                string menuId = string.Format("{0}{1}", menuPrefix, i);
                 
                 // Remove Directory context menu
                 sb.AppendLine(string.Format("reg delete \"HKEY_CLASSES_ROOT\\Directory\\shell\\{0}\" /f >nul 2>&1", menuId));
@@ -131,7 +193,7 @@ namespace ExplorerMenuForge
             Console.WriteLine(string.Format("Removal script generated successfully: {0}", Path.GetFullPath(outputPath)));
         }
 
-        static string GenerateRegistryFile(string[] executablePaths, string menuId)
+        static string GenerateRegistryFile(string[] executablePaths, string menuId, string menuCaption)
         {
             StringBuilder sb = new StringBuilder();
             
@@ -143,7 +205,7 @@ namespace ExplorerMenuForge
             sb.AppendLine(";This displays context menu when you right-click Directory");
             sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\shell\\{0}]", menuId));
             sb.AppendLine(";Directory Level Menu Title");
-            sb.AppendLine("\"MUIVerb\"=\"MyNewMenu\"");
+            sb.AppendLine(string.Format("\"MUIVerb\"=\"{0}\"", menuCaption));
             sb.AppendLine("\"Icon\"=\"cmd.exe\"");
             sb.AppendLine(string.Format("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\{0}\"", menuId));
             sb.AppendLine();
@@ -151,7 +213,7 @@ namespace ExplorerMenuForge
             sb.AppendLine(";This displays context menu when you right-click Directory Background");
             sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\background\\shell\\{0}]", menuId));
             sb.AppendLine(";Background Level Menu Title");
-            sb.AppendLine("\"MUIVerb\"=\"MyNewMenu\"");
+            sb.AppendLine(string.Format("\"MUIVerb\"=\"{0}\"", menuCaption));
             sb.AppendLine("\"Icon\"=\"cmd.exe\"");
             sb.AppendLine(string.Format("\"ExtendedSubCommandsKey\"=\"Directory\\\\ContextMenus\\\\{0}\"", menuId));
             sb.AppendLine();
@@ -184,7 +246,7 @@ namespace ExplorerMenuForge
 
                 // Extract application name from path
                 string appName = Path.GetFileNameWithoutExtension(resolvedPath);
-                
+
                 // Get Full path
                 string fullPath = Path.GetFullPath(resolvedPath);
 
@@ -197,7 +259,7 @@ namespace ExplorerMenuForge
                 sb.AppendLine("\"Position\"=\"top\"");
                 sb.AppendLine(string.Format("\"Icon\"=\"{0}\"", escapedPath));
                 sb.AppendLine();
-                
+
                 sb.AppendLine(string.Format("[HKEY_CLASSES_ROOT\\Directory\\ContextMenus\\{0}\\shell\\{1}\\command]", menuId, appName));
                 sb.AppendLine(string.Format("@=\"{0} \\\"%1\\\"\"", escapedPath));
                 sb.AppendLine();
